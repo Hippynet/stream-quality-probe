@@ -44,6 +44,26 @@ The main `/faults` stream plays stereo, then dual mono, out of phase, silence, l
 
 It isn't part of CI because it needs ffmpeg and streams in real time. Run it locally before every release, and whenever you change analysis, networking, decoding or findings.
 
+## README screenshots
+
+The images in `docs/images/` are real dashboard frames. If a change alters the dashboard noticeably, refresh them:
+
+1. Capture the dashboard in a pseudo-terminal of a fixed size. For the fault screenshot, start the fake server (`python3 tests/fake_icecast.py`) and the probe together, and stop at about 106 s so the timeline holds every injected fault:
+
+   ```bash
+   script -q dash.tty sh -c 'stty cols 120 rows 46; streamprobe https://ice2.somafm.com/groovesalad-128-mp3 -t 50'
+   script -q faults.tty sh -c 'stty cols 120 rows 50; streamprobe http://127.0.0.1:18765/faults -t 106'
+   ```
+
+   On Linux the syntax is `script -q -c "<command>" <file>`.
+
+2. Render the last frame with headless Chrome or Chromium (set `CHROME` if it isn't found):
+
+   ```bash
+   python3 scripts/render_screenshot.py dash.tty docs/images/dashboard.png --title "streamprobe — a live stream" --rows 46
+   python3 scripts/render_screenshot.py faults.tty docs/images/faults.png --title "streamprobe — test stream with injected faults" --rows 50
+   ```
+
 ## Pull requests
 
 - Work on a short-lived branch and open a pull request against `main`. PRs are squash-merged.
@@ -94,15 +114,15 @@ The Rust dependencies are deliberately few: `rustls` (with `ring`) and `webpki-r
 
 Releases are tag-driven and immutable. Maintainers cut them; contributors don't need to do anything.
 
-The tag is `MAJOR.MINOR.PATCH.BUILD`, with no leading `v` (the first release is `0.1.0.0`). Its first three parts must equal `version` in `Cargo.toml`. The `BUILD` part allows another release of the same code version, for example after a packaging fix.
+The tag is `MAJOR.MINOR.PATCH.BUILD`, with no leading `v` (the first release is `0.1.0.1`). Its first three parts must equal `version` in `Cargo.toml`. The `BUILD` part allows another release of the same code version, for example after a packaging fix. A tag whose release workflow fails is never moved or reused: fix the problem and tag the next `BUILD` number.
 
 1. On `main`: set `version` in `Cargo.toml` if it changes, and move the `Unreleased` changelog entries under the new version and date. Merge that through a PR.
 2. Check out the merged `main` and make sure everything is green locally: `make lint test test-faults deny`.
 3. Tag and push:
 
    ```bash
-   git tag 0.1.0.0
-   git push origin 0.1.0.0
+   git tag -a 0.2.0.0 -m "streamprobe 0.2.0.0"
+   git push origin 0.2.0.0
    ```
 
 4. The **Release** workflow (`.github/workflows/release.yml`) checks the tag against `Cargo.toml`. It builds static Linux x86_64 and arm64 binaries (musl, through cargo-zigbuild) and a universal macOS binary, smoke-tests each one on its own architecture, and packages each one with the README, both licence files and `THIRD_PARTY_LICENSES.txt`. It then creates the GitHub release with `SHA256SUMS`. The install script picks up the new release from `releases/latest`.

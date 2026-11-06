@@ -4,9 +4,9 @@ All notable changes to streamprobe are recorded here. The format follows [Keep a
 
 ## [Unreleased]
 
-## [0.1.0.0] - 2026-11-06
+## [0.1.0.1] - 2026-11-06
 
-The first public release.
+The first public release. (`0.1.0.0` was tagged but never released: the release workflow's Linux smoke test misread a static binary's `ldd` exit status. Same code, fixed release workflow.)
 
 ### Added
 
@@ -25,5 +25,5 @@ The first public release.
 - Release binaries for macOS (universal) and static Linux (x86_64 and arm64), each archive with `THIRD_PARTY_LICENSES.txt`, and an install script that verifies downloads against `SHA256SUMS`.
 - Licensed under MIT OR Apache-2.0.
 
-[Unreleased]: https://github.com/Hippynet/stream-quality-probe/compare/0.1.0.0...HEAD
-[0.1.0.0]: https://github.com/Hippynet/stream-quality-probe/releases/tag/0.1.0.0
+[Unreleased]: https://github.com/Hippynet/stream-quality-probe/compare/0.1.0.1...HEAD
+[0.1.0.1]: https://github.com/Hippynet/stream-quality-probe/releases/tag/0.1.0.1

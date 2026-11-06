@@ -105,9 +105,13 @@ jobs:
         run: |
           set -euo pipefail
           bin=target/x86_64-unknown-linux-musl/release/streamprobe
-          "$bin" --version | tee /dev/stderr | grep -qF "$VERSION"
+          # capture, then match: no pipelines, because under pipefail `ldd`
+          # exits 1 for a static binary and `grep -q` can SIGPIPE the writer
+          v="$("$bin" --version)"; echo "$v"
+          [[ "$v" == *"$VERSION"* ]] || { echo "::error::--version doesn't report $VERSION"; exit 1; }
           # must run on any distro (old enterprise ones included): no dynamic libs
-          ldd "$bin" 2>&1 | tee /dev/stderr | grep -qE "not a dynamic executable|statically linked"
+          l="$(ldd "$bin" 2>&1 || true)"; echo "$l"
+          [[ "$l" == *"not a dynamic executable"* || "$l" == *"statically linked"* ]] || { echo "::error::binary is dynamically linked"; exit 1; }
       - name: Package
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -149,8 +153,10 @@ jobs:
           tar -xzf "dist/streamprobe-${VERSION}-linux-arm64.tar.gz" -C "$RUNNER_TEMP/x"
           bin="$RUNNER_TEMP/x/streamprobe"
           uname -m
-          "$bin" --version | tee /dev/stderr | grep -qF "$VERSION"
-          ldd "$bin" 2>&1 | tee /dev/stderr | grep -qE "not a dynamic executable|statically linked"
+          v="$("$bin" --version)"; echo "$v"
+          [[ "$v" == *"$VERSION"* ]] || { echo "::error::--version doesn't report $VERSION"; exit 1; }
+          l="$(ldd "$bin" 2>&1 || true)"; echo "$l"
+          [[ "$l" == *"not a dynamic executable"* || "$l" == *"statically linked"* ]] || { echo "::error::binary is dynamically linked"; exit 1; }
 
   macos:
     name: macOS (universal)
@@ -178,7 +184,8 @@ jobs:
             target/x86_64-apple-darwin/release/streamprobe
           codesign --force --sign - streamprobe   # ad-hoc signature (not notarised)
           lipo -info streamprobe
-          ./streamprobe --version | tee /dev/stderr | grep -qF "$STREAMPROBE_VERSION"
+          v="$(./streamprobe --version)"; echo "$v"
+          [[ "$v" == *"$STREAMPROBE_VERSION"* ]] || { echo "::error::--version doesn't report $STREAMPROBE_VERSION"; exit 1; }
       - name: Package
         env:
           VERSION: ${{ needs.version.outputs.version }}

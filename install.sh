@@ -2,7 +2,7 @@
 # Install streamprobe from the GitHub releases of Hippynet/stream-quality-probe.
 #
 #   curl -fsSL https://raw.githubusercontent.com/Hippynet/stream-quality-probe/main/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/Hippynet/stream-quality-probe/main/install.sh | sh -s 0.1.0.0
+#   curl -fsSL https://raw.githubusercontent.com/Hippynet/stream-quality-probe/main/install.sh | sh -s 0.1.0.1
 #   sh install.sh [VERSION]
 #
 # Downloads the build for this machine (macOS universal, Linux x86_64 or
