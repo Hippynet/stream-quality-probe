@@ -44,6 +44,26 @@ The main `/faults` stream plays stereo, then dual mono, out of phase, silence, l
 
 It isn't part of CI because it needs ffmpeg and streams in real time. Run it locally before every release, and whenever you change analysis, networking, decoding or findings.
 
+## README screenshots
+
+The images in `docs/images/` are real dashboard frames. If a change alters the dashboard noticeably, refresh them:
+
+1. Capture the dashboard in a pseudo-terminal of a fixed size. For the fault screenshot, start the fake server (`python3 tests/fake_icecast.py`) and the probe together, and stop at about 106 s so the timeline holds every injected fault:
+
+   ```bash
+   script -q dash.tty sh -c 'stty cols 120 rows 46; streamprobe https://ice2.somafm.com/groovesalad-128-mp3 -t 50'
+   script -q faults.tty sh -c 'stty cols 120 rows 50; streamprobe http://127.0.0.1:18765/faults -t 106'
+   ```
+
+   On Linux the syntax is `script -q -c "<command>" <file>`.
+
+2. Render the last frame with headless Chrome or Chromium (set `CHROME` if it isn't found):
+
+   ```bash
+   python3 scripts/render_screenshot.py dash.tty docs/images/dashboard.png --title "streamprobe — a live stream" --rows 46
+   python3 scripts/render_screenshot.py faults.tty docs/images/faults.png --title "streamprobe — test stream with injected faults" --rows 50
+   ```
+
 ## Pull requests
 
 - Work on a short-lived branch and open a pull request against `main`. PRs are squash-merged.

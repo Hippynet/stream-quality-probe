@@ -10,6 +10,16 @@ streamprobe https://stream.example.com/live
 
 It's a single binary for macOS and Linux. The only runtime dependency is [ffmpeg](https://ffmpeg.org/), which it runs to decode the audio.
 
+## Screenshots
+
+A healthy public stream. The panel at the top shows what the server and encoder actually send: station details, server, TLS certificate, the codec as decoded, a frame-by-frame analysis of the raw bytes, and ffprobe's view. Below that are live levels, loudness, stereo state, quality and delivery, a timeline of the session and the checks so far.
+
+<p align="center"><img src="docs/images/dashboard.png" alt="streamprobe's live dashboard on a healthy Icecast stream: station, server, TLS, format, frame and ffprobe details, level meters, loudness, stereo, quality and delivery lines, a timeline and passing checks" width="860"></p>
+
+The bundled test stream with injected faults (`make test-faults`). Over about 100 seconds it goes mono, out of phase, silent, left-only and clipping, then stalls long enough for a listener's buffer to run dry, and drops the connection. The timeline shows when each fault happened, the checks explain what each one means for listeners, and the event log records the stall, the underrun and the reconnect.
+
+<p align="center"><img src="docs/images/faults.png" alt="streamprobe's dashboard on a test stream with injected faults: the timeline shows mono, out-of-phase, silent, left-only and clipping sections, a stall with a listener underrun and a disconnect; the checks list each problem" width="860"></p>
+
 ## What it checks
 
 | Area | What streamprobe measures |
