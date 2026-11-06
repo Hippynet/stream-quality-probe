@@ -1,0 +1,65 @@
+name: Bug report
+description: streamprobe crashed, hung, misreported a stream or didn't install
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. For a security problem, please use private reporting instead: **Security → Report a vulnerability**.
+
+        Before you paste anything, **remove what you don't want public**: private stream URLs, hostnames, IP addresses, passwords or tokens in URLs, and internal network details. Replacing them with `example.com` is fine.
+  - type: input
+    id: version
+    attributes:
+      label: streamprobe version
+      description: Output of `streamprobe --version`
+      placeholder: streamprobe 0.1.0.0
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: OS, version and architecture
+      placeholder: macOS 15.5 (Apple silicon) / Ubuntu 24.04 x86_64 / AlmaLinux 9 arm64
+    validations:
+      required: true
+  - type: input
+    id: ffmpeg
+    attributes:
+      label: ffmpeg version
+      description: The first line of `ffmpeg -version`
+      placeholder: ffmpeg version 7.1.1 Copyright (c) 2000-2025 the FFmpeg developers
+    validations:
+      required: true
+  - type: dropdown
+    id: stream
+    attributes:
+      label: Stream type
+      options:
+        - Icecast
+        - Shoutcast
+        - HLS (.m3u8)
+        - Playlist (.pls / .m3u / .xspf)
+        - Other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the command you ran. If streamprobe misreported a stream, say what you know about the stream (codec, bitrate, how it sounds to listeners).
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: JSON report
+      description: |
+        Run `streamprobe <URL> -t 60 --json > report.json` (adjust `-t` to cover the problem) and paste the file here. If you can't share it in full, `result`, `findings`, `connection`, `format` and `delivery` help most. **Redact private URLs and addresses first.** The report quotes headers and titles sent by the server.
+      render: json
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Terminal output, screenshots of the dashboard, or whether another player has the same problem with this stream.

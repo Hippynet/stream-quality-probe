@@ -1,0 +1,28 @@
+# Weekly dependency updates. `cooldown` keeps to the project rule that a new
+# version must be at least two weeks old before we take it (security updates
+# are not delayed). Actions stay pinned to commit SHAs; Dependabot updates the
+# SHA and its version comment together.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: ci
+      include: scope

@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest a new check, output or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: The stream fault, workflow or question you're dealing with. A real-world example helps.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like streamprobe to do?
+      description: For a new check, say what it should measure and roughly when it should warn. For output changes, say who or what would consume it (a person, a script, a monitoring system).
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: How you handle this today, or other tools that do it.

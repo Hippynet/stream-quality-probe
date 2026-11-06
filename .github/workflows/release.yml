@@ -1,0 +1,246 @@
+name: Release
+
+# Tag-driven, immutable releases: pushing a four-part version tag (0.1.0.0,
+# no leading v) builds the binaries once and publishes them as a GitHub
+# release. Merging to main ships nothing, and an existing release is never
+# overwritten: to change anything, cut a new tag.
+#
+# workflow_dispatch is a rehearsal: it builds an existing tag and keeps the
+# files as workflow artifacts, but never publishes.
+#
+# Builds, all on GitHub-hosted runners: static Linux x86_64 + arm64 (musl,
+# linked by zig through cargo-zigbuild) and a macOS universal binary. Each
+# binary is smoke-tested on its own architecture (arm64 Linux on a native
+# arm64 runner). Every action is pinned to a commit and nothing is restored
+# from a cache, so nothing written by another workflow can reach a release.
+#
+# Each archive holds the binary, README.md, LICENSE-MIT, LICENSE-APACHE and
+# THIRD_PARTY_LICENSES.txt (scripts/third_party_licenses.py, for exactly the
+# targets in that archive).
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing version tag to build (nothing is published)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false # never cancel a release half-way
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          persist-credentials: false
+      - id: version
+        name: Check the tag matches Cargo.toml
+        env:
+          # Tag names are untrusted input: through env, never inlined.
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag must be MAJOR.MINOR.PATCH.BUILD (e.g. 0.1.0.0), got: $TAG"; exit 1; }
+          cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          [[ "${TAG%.*}" == "$cargo_version" ]] || { echo "::error::tag $TAG doesn't match Cargo.toml version $cargo_version (expected $cargo_version.N)"; exit 1; }
+          echo "version=$TAG" >>"$GITHUB_OUTPUT"
+          if [[ "$EVENT" == "push" ]]; then echo "publish=true" >>"$GITHUB_OUTPUT"; else echo "publish=false" >>"$GITHUB_OUTPUT"; fi
+
+  linux:
+    name: Linux (static, ${{ matrix.arch }})
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: x86_64
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            target: aarch64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - name: Install zig and cargo-zigbuild (pinned by hash; no root needed)
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/zig"
+          "$RUNNER_TEMP/zig/bin/pip" install --disable-pip-version-check --require-hashes \
+            -r .github/zigbuild-requirements.txt
+          echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
+      - name: Build
+        env:
+          STREAMPROBE_VERSION: ${{ needs.version.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: cargo zigbuild --release --locked --target "$TARGET"
+      - name: Smoke test
+        if: matrix.arch == 'x86_64'
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          bin=target/x86_64-unknown-linux-musl/release/streamprobe
+          "$bin" --version | tee /dev/stderr | grep -qF "$VERSION"
+          # must run on any distro (old enterprise ones included): no dynamic libs
+          ldd "$bin" 2>&1 | tee /dev/stderr | grep -qE "not a dynamic executable|statically linked"
+      - name: Package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          TARGET: ${{ matrix.target }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/stage"
+          mkdir -p "$stage" dist
+          cp "target/${TARGET}/release/streamprobe" README.md LICENSE-MIT LICENSE-APACHE "$stage/"
+          python3 scripts/third_party_licenses.py --target "$TARGET" -o "$stage/THIRD_PARTY_LICENSES.txt"
+          archive="dist/streamprobe-${VERSION}-linux-${ARCH}.tar.gz"
+          files=(streamprobe README.md LICENSE-MIT LICENSE-APACHE THIRD_PARTY_LICENSES.txt)
+          tar -czf "$archive" -C "$stage" "${files[@]}"
+          diff <(printf '%s\n' "${files[@]}" | sort) <(tar -tzf "$archive" | sort)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  linux-arm64-smoke:
+    name: Linux arm64 smoke test
+    needs: [version, linux]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: linux-arm64
+          path: dist
+      - name: Run the arm64 binary
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/x"
+          tar -xzf "dist/streamprobe-${VERSION}-linux-arm64.tar.gz" -C "$RUNNER_TEMP/x"
+          bin="$RUNNER_TEMP/x/streamprobe"
+          uname -m
+          "$bin" --version | tee /dev/stderr | grep -qF "$VERSION"
+          ldd "$bin" 2>&1 | tee /dev/stderr | grep -qE "not a dynamic executable|statically linked"
+
+  macos:
+    name: macOS (universal)
+    needs: version
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - name: Build both architectures and join them
+        env:
+          STREAMPROBE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          lipo -create -output streamprobe \
+            target/aarch64-apple-darwin/release/streamprobe \
+            target/x86_64-apple-darwin/release/streamprobe
+          codesign --force --sign - streamprobe   # ad-hoc signature (not notarised)
+          lipo -info streamprobe
+          ./streamprobe --version | tee /dev/stderr | grep -qF "$STREAMPROBE_VERSION"
+      - name: Package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          COPYFILE_DISABLE: "1" # no AppleDouble ._ files in the archive
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/stage"
+          mkdir -p "$stage" dist
+          cp streamprobe README.md LICENSE-MIT LICENSE-APACHE "$stage/"
+          python3 scripts/third_party_licenses.py --target aarch64-apple-darwin --target x86_64-apple-darwin \
+            -o "$stage/THIRD_PARTY_LICENSES.txt"
+          archive="dist/streamprobe-${VERSION}-macos-universal.tar.gz"
+          files=(streamprobe README.md LICENSE-MIT LICENSE-APACHE THIRD_PARTY_LICENSES.txt)
+          tar -czf "$archive" -C "$stage" "${files[@]}"
+          diff <(printf '%s\n' "${files[@]}" | sort) <(tar -tzf "$archive" | sort)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: macos-universal
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: publish release
+    needs: [version, linux, linux-arm64-smoke, macos]
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the release and upload its files; nothing else
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum streamprobe-*.tar.gz >SHA256SUMS
+          cat SHA256SUMS
+      - name: Create the release (never overwrites an existing one)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/$REPO"
+          auth=(-H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+          if curl -fsS "${auth[@]}" "$api/releases/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::release $TAG already exists - versions are immutable, cut a new tag"
+            exit 1
+          fi
+          body="$(python3 -c 'import json, os; t = os.environ["TAG"]; print(json.dumps({"tag_name": t, "name": "streamprobe " + t, "draft": True, "generate_release_notes": True}))')"
+          id="$(curl -fsS "${auth[@]}" -X POST "$api/releases" -d "$body" | python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])')"
+          for f in dist/*; do
+            name="$(basename "$f")"
+            curl -fsS "${auth[@]}" -H "Content-Type: application/octet-stream" --data-binary @"$f" \
+              "https://uploads.github.com/repos/$REPO/releases/$id/assets?name=$name" >/dev/null
+            echo "uploaded $name"
+          done
+          # Drafts are invisible to /releases/latest and the installer; publish once every file is there.
+          curl -fsS "${auth[@]}" -X PATCH "$api/releases/$id" -d '{"draft": false}' >/dev/null
+          echo "published $TAG"

@@ -1,0 +1,46 @@
+# cargo-deny: `make deny` locally; CI runs `cargo deny check` on every PR.
+# https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+# The platforms we ship binaries for.
+targets = [
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-musl",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+]
+
+[advisories]
+# RustSec advisory database. Vulnerable or yanked crates fail the check; to
+# accept one deliberately, add its advisory ID to `ignore` with a reason.
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Exactly the licences our dependencies use today, all compatible with
+# distributing streamprobe under MIT OR Apache-2.0. A new licence is a
+# decision, not a drive-by: add it here in its own PR.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "ISC",
+    "BSD-3-Clause",
+    "Zlib",
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
+    "Unlicense",
+]
+confidence-threshold = 0.93
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+# crates.io only: no other registries, no git dependencies.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

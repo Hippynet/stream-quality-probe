@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Hippynet/stream-quality-probe/security/advisories/new
+    about: Please report security problems privately, not as a public issue.
+  - name: What does a finding code mean?
+    url: https://github.com/Hippynet/stream-quality-probe/blob/main/docs/FINDINGS.md
+    about: Every finding code, what it means and what to check.
