@@ -36,7 +36,7 @@ curl -fsSL https://raw.githubusercontent.com/Hippynet/stream-quality-probe/main/
 
 The [installer](install.sh) is a short POSIX shell script; you can read it before you run it. It downloads the latest release for your platform from [GitHub Releases](https://github.com/Hippynet/stream-quality-probe/releases), checks it against the release's `SHA256SUMS` and installs `streamprobe` into the first writable directory of `/opt/homebrew/bin`, `/usr/local/bin` and `~/.local/bin`. It needs no GitHub account.
 
-- To pin a version: `curl -fsSL …/install.sh | sh -s 0.1.0.0`
+- To pin a version: `curl -fsSL …/install.sh | sh -s 0.1.0.1`
 - To choose the directory: `curl -fsSL …/install.sh | DEST="$HOME/bin" sh`
 
 ### ffmpeg

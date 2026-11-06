@@ -94,15 +94,15 @@ The Rust dependencies are deliberately few: `rustls` (with `ring`) and `webpki-r
 
 Releases are tag-driven and immutable. Maintainers cut them; contributors don't need to do anything.
 
-The tag is `MAJOR.MINOR.PATCH.BUILD`, with no leading `v` (the first release is `0.1.0.0`). Its first three parts must equal `version` in `Cargo.toml`. The `BUILD` part allows another release of the same code version, for example after a packaging fix.
+The tag is `MAJOR.MINOR.PATCH.BUILD`, with no leading `v` (the first release is `0.1.0.1`). Its first three parts must equal `version` in `Cargo.toml`. The `BUILD` part allows another release of the same code version, for example after a packaging fix. A tag whose release workflow fails is never moved or reused: fix the problem and tag the next `BUILD` number.
 
 1. On `main`: set `version` in `Cargo.toml` if it changes, and move the `Unreleased` changelog entries under the new version and date. Merge that through a PR.
 2. Check out the merged `main` and make sure everything is green locally: `make lint test test-faults deny`.
 3. Tag and push:
 
    ```bash
-   git tag 0.1.0.0
-   git push origin 0.1.0.0
+   git tag -a 0.2.0.0 -m "streamprobe 0.2.0.0"
+   git push origin 0.2.0.0
    ```
 
 4. The **Release** workflow (`.github/workflows/release.yml`) checks the tag against `Cargo.toml`. It builds static Linux x86_64 and arm64 binaries (musl, through cargo-zigbuild) and a universal macOS binary, smoke-tests each one on its own architecture, and packages each one with the README, both licence files and `THIRD_PARTY_LICENSES.txt`. It then creates the GitHub release with `SHA256SUMS`. The install script picks up the new release from `releases/latest`.
