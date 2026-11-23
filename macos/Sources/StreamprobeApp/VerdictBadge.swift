@@ -21,17 +21,13 @@ struct VerdictBadge: View {
     }
 
     private var verdict: String? {
-        session.phase == .connecting ? nil : session.verdict
-    }
-
-    private var title: String {
-        switch verdict {
-        case "healthy": "Healthy"
-        case "warnings": "Warnings"
-        case "problems": "Problems"
-        default: session.phase == .idle ? "No check yet" : "Checking…"
+        switch session.phase {
+        case .running, .finished, .endedUnexpectedly: session.verdict
+        default: nil
         }
     }
+
+    private var title: String { session.verdictTitle }
 
     private var subtitle: String? {
         let counts = Dictionary(grouping: session.findings, by: \.level).mapValues(\.count)
@@ -39,7 +35,8 @@ struct VerdictBadge: View {
             guard let n = counts[level], n > 0 else { return nil }
             return "\(n) \(noun)\(n == 1 ? "" : "s")"
         }
-        if session.phase == .running { return (parts.isEmpty ? "nothing wrong" : parts.joined(separator: " · ")) + " so far" }
+        guard verdict != nil else { return nil }
+        if !session.verdictIsFinal { return (parts.isEmpty ? "nothing wrong" : parts.joined(separator: " · ")) + " so far" }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 

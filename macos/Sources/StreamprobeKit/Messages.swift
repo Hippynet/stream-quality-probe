@@ -184,3 +184,12 @@ public enum ProbeMessage: Sendable, Equatable {
                     audio: r.audio, delivery: r.delivery, metadata: r.metadata)
     }
 }
+
+extension Timeline {
+    /// The point covering `t` seconds into the check, if any. Look points up by
+    /// time, never by a stored index: the timeline is replaced every second and
+    /// zooms out as the check runs, so an old index can point past the end.
+    public func pointIndex(at t: Double) -> Int? {
+        points.lastIndex { Double($0.offsetS) <= t && t < Double($0.offsetS + resolutionS) }
+    }
+}

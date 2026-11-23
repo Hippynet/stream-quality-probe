@@ -135,6 +135,7 @@ struct CheckWindow: View {
             if session.isActive {
                 Button(action: session.stop) { Label("Stop", systemImage: "stop.fill") }
                     .keyboardShortcut(".", modifiers: .command)
+                    .disabled(session.isStopping)
                     .help("Stop and show the final report (⌘.)")
             } else {
                 Button(action: check) {
@@ -186,6 +187,11 @@ struct StatusLabel: View {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
                     Text("Connecting…")
+                }
+            case _ where session.isStopping:
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Stopping…")
                 }
             case .running:
                 let live = session.live?.phase == "live"

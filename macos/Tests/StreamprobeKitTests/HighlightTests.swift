@@ -62,3 +62,13 @@ private func h(_ code: String, _ events: [ProbeEvent] = [], _ points: [TimelineP
     #expect(h("too_loud").row == nil)
     #expect(h("tls_cert").row == nil)
 }
+
+@Test func hoverLooksUpPointsByTime() {
+    // the timeline zooms out (1 s → 2 s columns) between reports: a hovered time must stay valid
+    let fine = Timeline(resolutionS: 1, points: (0..<120).map { pt($0) })
+    #expect(fine.pointIndex(at: 119.5) == 119)
+    let coarse = Timeline(resolutionS: 2, points: (0..<61).map { pt($0 * 2) })
+    #expect(coarse.pointIndex(at: 119.5) == 59)
+    #expect(coarse.pointIndex(at: 500) == nil)
+    #expect(coarse.pointIndex(at: -1) == nil)
+}

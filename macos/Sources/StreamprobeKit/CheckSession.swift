@@ -33,17 +33,43 @@ public final class CheckSession {
 
     @ObservationIgnored private var process: ProbeProcess?
     @ObservationIgnored private var run = 0
-    @ObservationIgnored private var stopRequested = false
+    private var stopRequested = false
 
     public init() {}
 
     public var isActive: Bool { phase == .connecting || phase == .running }
+
+    /// Stop was pressed and streamprobe is writing its final report.
+    public var isStopping: Bool { isActive && stopRequested }
 
     /// The final report's findings once finished, else the live (in-progress) ones.
     public var findings: [Finding] { result?.report.findings ?? live?.findings ?? [] }
 
     /// `healthy`, `warnings` or `problems`, by the same rule as `findings`.
     public var verdict: String? { result?.report.result ?? live?.result }
+
+    /// The badge's headline. Never "Checking…" once the check has ended.
+    public var verdictTitle: String {
+        switch phase {
+        case .idle: return "No check yet"
+        case .connecting: return "Checking…"
+        case .stoppedWhileConnecting: return "Stopped"
+        case .failed: return "Couldn't check"
+        case .running, .finished, .endedUnexpectedly:
+            switch verdict {
+            case "healthy": return "Healthy"
+            case "warnings": return "Warnings"
+            case "problems": return "Problems"
+            default: return phase == .running ? "Checking…" : "Incomplete"
+            }
+        }
+    }
+
+    /// The verdict is streamprobe's final one (otherwise it's "so far").
+    public var verdictIsFinal: Bool {
+        if case .finished = phase { return true }
+        return false
+    }
 
     public func start(_ r: CheckRequest, binary: URL) {
         stop()
@@ -84,7 +110,8 @@ public final class CheckSession {
 
     /// Ask streamprobe to stop and write its final report.
     public func stop() {
-        guard isActive, let process else { return }
+        // once only: a second SIGINT tells streamprobe to quit at once, without its report
+        guard isActive, !stopRequested, let process else { return }
         stopRequested = true
         process.interrupt(killAfter: killAfter)
     }

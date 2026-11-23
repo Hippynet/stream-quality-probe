@@ -8,7 +8,10 @@ struct TimelineView: View {
     let highlight: FindingHighlight
     let duration: Double
 
-    @State private var hover: Int?
+    /// Seconds into the check under the pointer (a time, not an index: see Timeline.pointIndex).
+    @State private var hoverTime: Double?
+
+    private var hover: Int? { hoverTime.flatMap { timeline.pointIndex(at: $0) } }
 
     private static let rows: [(TimelineRow, String)] =
         [(.level, "Level"), (.stereo, "Stereo"), (.clip, "Clip"), (.delivery, "Delivery"), (.track, "Track")]
@@ -35,8 +38,8 @@ struct TimelineView: View {
                     Canvas { ctx, size in draw(&ctx, size) }
                         .onContinuousHover { phase in
                             switch phase {
-                            case .active(let p): hover = index(at: p.x, width: g.size.width)
-                            case .ended: hover = nil
+                            case .active(let p): hoverTime = Double(p.x / max(1, g.size.width)) * span
+                            case .ended: hoverTime = nil
                             }
                         }
                         .overlay(alignment: .topLeading) { tooltip(width: g.size.width) }
@@ -118,11 +121,6 @@ struct TimelineView: View {
             ctx.fill(Path(CGRect(x: x0, y: 0, width: max(1, x(Double(p.offsetS) + res, w) - x0), height: Self.plotH - Self.gap)),
                      with: .color(.primary.opacity(0.12)))
         }
-    }
-
-    private func index(at px: CGFloat, width: CGFloat) -> Int? {
-        let t = Double(px / width) * span
-        return timeline.points.lastIndex { Double($0.offsetS) <= t && t < Double($0.offsetS + timeline.resolutionS) }
     }
 
     // MARK: hover, axis, legend

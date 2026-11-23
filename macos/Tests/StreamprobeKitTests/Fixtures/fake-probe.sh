@@ -4,6 +4,8 @@
 #   die          print a start line, exit 9 (no final line)
 #   error        print an error line, exit 3
 #   stubborn     ignore SIGINT, print a start line, sleep
+#   graceful     like streamprobe: first SIGINT -> final line after 0.4 s, exit 2;
+#                a second SIGINT before that -> exit 130 with no final line
 here=$(dirname "$0")
 case "$1" in
   replay:*)
@@ -16,6 +18,15 @@ case "$1" in
   error)
     printf '{"type":"error","code":"ffmpeg_missing","message":"ffmpeg not found"}\n'
     exit 3 ;;
+  graceful)
+    n=0; stopping=0
+    trap 'n=$((n+1)); stopping=1; if [ $n -ge 2 ]; then exit 130; fi' INT
+    printf '{"type":"start","version":"t","url":"graceful"}\n'
+    sed -n 2p "$here/faults.ndjson"
+    while :; do
+      if [ "$stopping" = 1 ]; then sleep 0.4; tail -n 1 "$here/faults.ndjson"; exit 2; fi
+      sleep 0.05
+    done ;;
   stubborn)
     trap '' INT
     printf '{"type":"start","version":"t","url":"stubborn"}\n'

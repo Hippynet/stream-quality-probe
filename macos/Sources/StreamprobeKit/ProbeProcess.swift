@@ -36,9 +36,12 @@ public final class ProbeProcess: @unchecked Sendable {
         process.standardError = err
         process.standardInput = FileHandle.nullDevice
 
+        // The handlers hold `self` strongly on purpose: a closed window may drop its
+        // ProbeProcess mid-check, and the pipes must still be drained to end of file
+        // (a handler that returns without reading is called again at once, forever).
+        // Each handler clears itself at end of file, which breaks the cycle.
         outHandle = out.fileHandleForReading
-        out.fileHandleForReading.readabilityHandler = { [weak self] h in
-            guard let self else { return }
+        out.fileHandleForReading.readabilityHandler = { h in
             let data = h.availableData
             if data.isEmpty {
                 self.endStdout()
@@ -46,8 +49,7 @@ public final class ProbeProcess: @unchecked Sendable {
                 for line in self.lock.withLock({ self.outSplit.append(data) }) { self.onLine(line) }
             }
         }
-        err.fileHandleForReading.readabilityHandler = { [weak self] h in
-            guard let self else { return }
+        err.fileHandleForReading.readabilityHandler = { h in
             let data = h.availableData
             let lines = self.lock.withLock {
                 data.isEmpty ? [self.errSplit.finish()].compactMap { $0 } : self.errSplit.append(data)
@@ -55,13 +57,13 @@ public final class ProbeProcess: @unchecked Sendable {
             if data.isEmpty { h.readabilityHandler = nil }
             for l in lines { self.onStderr(String(decoding: l, as: UTF8.self)) }
         }
-        process.terminationHandler = { [weak self] p in
-            guard let self else { return }
+        process.terminationHandler = { p in
             self.lock.withLock { self.exitStatus = p.terminationStatus }
             self.reportExitIfDone()
-            DispatchQueue.global().asyncAfter(deadline: .now() + self.eofGrace) { [weak self] in
-                self?.endStdout()
+            DispatchQueue.global().asyncAfter(deadline: .now() + self.eofGrace) {
+                self.endStdout()
             }
+            p.terminationHandler = nil
         }
         try process.run()
     }

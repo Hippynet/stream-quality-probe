@@ -38,6 +38,7 @@ private func liveSnapshot(events: [ProbeEvent] = [], findings: [Finding] = []) -
     #expect(!s.events.isEmpty)
     #expect(s.verdict == "problems")
     #expect(s.result?.text.isEmpty == false)
+    #expect(s.verdictTitle == "Problems" && s.verdictIsFinal)
 }
 
 @MainActor @Test func sessionEndsUnexpectedlyWithoutFinal() async throws {
@@ -45,6 +46,7 @@ private func liveSnapshot(events: [ProbeEvent] = [], findings: [Finding] = []) -
     s.start(CheckRequest(url: "die"), binary: try fakeProbe())
     await waitFor { s.phase == .endedUnexpectedly(exitStatus: 9) }
     #expect(s.phase == .endedUnexpectedly(exitStatus: 9))
+    #expect(s.verdictTitle == "Incomplete")
     await waitFor { !s.stderrTail.isEmpty }
     #expect(s.stderrTail == ["fake: dying"])
 }
@@ -54,6 +56,7 @@ private func liveSnapshot(events: [ProbeEvent] = [], findings: [Finding] = []) -
     s.start(CheckRequest(url: "error"), binary: try fakeProbe())
     await waitFor { if case .failed = s.phase { true } else { false } }
     #expect(s.phase == .failed(ProbeError(code: "ffmpeg_missing", message: "ffmpeg not found")))
+    #expect(s.verdictTitle == "Couldn't check")
 }
 
 @MainActor @Test func stopWhileConnectingKillsAStubbornProcess() async throws {
@@ -66,6 +69,7 @@ private func liveSnapshot(events: [ProbeEvent] = [], findings: [Finding] = []) -
     await waitFor(4) { s.phase == .stoppedWhileConnecting }
     #expect(s.phase == .stoppedWhileConnecting)
     #expect(Date().timeIntervalSince(t0) < 4)
+    #expect(s.verdictTitle == "Stopped")
 }
 
 @MainActor @Test func launchFailureIsReported() {
@@ -124,4 +128,26 @@ private func liveSnapshot(events: [ProbeEvent] = [], findings: [Finding] = []) -
     s.handle(try #require(ProbeMessage.decode(last)))
     #expect(s.events.map(\.code).contains("http_404"))
     #expect(s.result?.report.events.isEmpty == false)
+}
+
+@MainActor @Test func stoppingTwiceKeepsTheFinalReport() async throws {
+    let s = CheckSession()
+    s.start(CheckRequest(url: "graceful"), binary: try fakeProbe())
+    await waitFor { s.phase == .running }
+    s.stop()
+    #expect(s.isStopping)
+    try await Task.sleep(for: .milliseconds(100))
+    s.stop() // a double-click on Stop, or ⌘. pressed twice
+    await waitFor { !s.isActive }
+    #expect(s.phase == .finished(exitCode: 2))
+    #expect(!s.isStopping)
+}
+
+@MainActor @Test func verdictTitleFollowsThePhase() {
+    let s = CheckSession()
+    #expect(s.verdictTitle == "No check yet")
+    s.handle(.live(liveSnapshot(findings: [Finding(level: .warn, code: "x", message: "m")])))
+    #expect(s.verdictTitle == "Healthy" && !s.verdictIsFinal) // the live line's own result
+    s.processExited(status: 9) // died after streaming: keep the verdict so far, not final
+    #expect(s.verdictTitle == "Healthy" && !s.verdictIsFinal)
 }
