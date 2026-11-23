@@ -27,6 +27,8 @@ public final class CheckSession {
     public private(set) var result: FinalResult?
     public private(set) var events: [ProbeEvent] = []
     public private(set) var stderrTail: [String] = []
+    /// Audio has been decoded at some point (meters say "no audio arriving" rather than "waiting").
+    public private(set) var sawAudio = false
     public var killAfter: Duration = .seconds(3)
 
     @ObservationIgnored private var process: ProbeProcess?
@@ -50,7 +52,7 @@ public final class CheckSession {
         phase = .connecting
         request = r
         startInfo = nil; live = nil; report = nil; result = nil
-        events = []; stderrTail = []
+        events = []; stderrTail = []; sawAudio = false
         stopRequested = false
 
         enum Incoming: Sendable { case line(Data), stderr(String), exit(Int32) }
@@ -93,6 +95,7 @@ public final class CheckSession {
             startInfo = s
         case .live(let l):
             live = l
+            if l.levels != nil { sawAudio = true }
             appendEvents(l.events)
             if phase == .connecting || phase == .idle { phase = .running }
         case .report(let r):

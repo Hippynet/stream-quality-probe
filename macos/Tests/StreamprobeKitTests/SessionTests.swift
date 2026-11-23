@@ -105,3 +105,15 @@ private func liveSnapshot(events: [ProbeEvent] = [], findings: [Finding] = []) -
     #expect(s.verdict == "problems")
     #expect(s.phase == .finished(exitCode: 2))
 }
+
+@MainActor @Test func sawAudioTracksLevels() {
+    let s = CheckSession()
+    s.handle(.live(liveSnapshot()))
+    #expect(!s.sawAudio)
+    var withLevels = liveSnapshot()
+    withLevels.levels = .init(rmsL: -15, rmsR: -15, peakL: -7, peakR: -7)
+    s.handle(.live(withLevels))
+    #expect(s.sawAudio)
+    s.handle(.live(liveSnapshot()))
+    #expect(s.sawAudio) // stays true: audio stopped arriving
+}
