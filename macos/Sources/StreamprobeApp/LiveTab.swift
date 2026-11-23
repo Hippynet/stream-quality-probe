@@ -85,7 +85,7 @@ struct LiveTab: View {
 
     private func quality(_ q: LiveSnapshot.Quality?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Big(q?.bandwidthHz.map { String(format: "~%.1f kHz", $0 / 1000) } ?? "measuring…", unit: "bandwidth")
+            Big(q?.bandwidthHz.map { String(format: "~%.1f kHz", $0 / 1000) } ?? (session.isActive ? "measuring…" : "—"), unit: "bandwidth")
             Small([("Max peak", db(q?.maxPeakDbfs, "dBFS")), ("Full-scale", q.map { "\($0.samplesAtFullScale)" } ?? "—")])
             Counts([("Overs >0 dBFS", q?.samplesOver0Dbfs, (q?.samplesOver0Dbfs ?? 0) > 50),
                     ("Decode errors", q?.decodeErrors, (q?.decodeErrors ?? 0) > 0)])
