@@ -5,3 +5,5 @@ tests/fixtures/
 .env
 .DS_Store
 /THIRD_PARTY_LICENSES.txt
+.superpowers/
+macos/.build/

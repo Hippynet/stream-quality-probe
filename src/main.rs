@@ -21,6 +21,7 @@ mod analysis;
 mod decoder;
 mod findings;
 mod frames;
+mod live;
 mod net;
 mod report;
 mod state;
@@ -72,6 +73,9 @@ struct Args {
     /// No live dashboard: print events and periodic status lines instead
     #[arg(long)]
     no_ui: bool,
+    /// Stream newline-delimited JSON state on stdout for a GUI front end (runs until -t or Ctrl-C)
+    #[arg(long, conflicts_with_all = ["json", "no_ui"])]
+    live_json: bool,
     /// Continue even if the TLS certificate is invalid (the problem is still reported)
     #[arg(long)]
     insecure: bool,
@@ -161,7 +165,9 @@ fn finish(sh: &Shared, args: &Args, stop_reason: &str, out_pal: Pal) -> ! {
     }
     let now = sh.now();
     let st = sh.lock();
-    if args.json {
+    if args.live_json {
+        let _ = live::emit(&live::final_line(&st, now, stop_reason, exit_code(&st, now)));
+    } else if args.json {
         println!(
             "{}",
             serde_json::to_string_pretty(&report::json_report(&st, now, stop_reason)).unwrap_or_default()
@@ -204,30 +210,42 @@ fn main() {
     let args = Args::parse();
     let no_color = std::env::var_os("NO_COLOR").is_some();
     let stdout_tty = std::io::stdout().is_terminal();
-    let ui_mode = stdout_tty && std::io::stdin().is_terminal() && !args.no_ui && !args.json;
+    let ui_mode = stdout_tty && std::io::stdin().is_terminal() && !args.no_ui && !args.json && !args.live_json;
     let out_pal = Pal {
         on: stdout_tty && !no_color,
     };
-    // progress goes to stderr in --json mode so stdout stays pure JSON
+    // progress goes to stderr in --json / --live-json mode so stdout stays pure JSON
+    let to_stderr = args.json || args.live_json;
     let log_pal = Pal {
         on: !no_color
-            && if args.json {
+            && if to_stderr {
                 std::io::stderr().is_terminal()
             } else {
                 stdout_tty
             },
     };
     let log = |s: String| {
-        if args.json {
+        if to_stderr {
             eprintln!("{s}");
         } else {
             println!("{s}");
         }
     };
-    let limit = args.time.or(if ui_mode { None } else { Some(DEFAULT_NONTTY_SEC) });
+    // --live-json: the front end stops the run, so no default limit
+    let limit = args.time.or(if ui_mode || args.live_json {
+        None
+    } else {
+        Some(DEFAULT_NONTTY_SEC)
+    });
 
     let Some(ffmpeg) = decoder::find_tool("ffmpeg") else {
         eprintln!("streamprobe: ffmpeg not found. Install it first:\n  macOS:  brew install ffmpeg\n  Debian/Ubuntu:  sudo apt install ffmpeg\n  RHEL/Alma/Rocky:  enable EPEL and RPM Fusion (rpmfusion.org/Configuration), then sudo dnf install ffmpeg");
+        if args.live_json {
+            let _ = live::emit(&live::error_line(
+                "ffmpeg_missing",
+                "ffmpeg not found. Install it with: brew install ffmpeg",
+            ));
+        }
         exit(3);
     };
     let ffprobe = decoder::find_tool("ffprobe");
@@ -260,6 +278,9 @@ fn main() {
         log_pal.reset(),
         limit.map_or(String::new(), |l| format!(" (running {l:.0}s)"))
     ));
+    if args.live_json {
+        let _ = live::emit(&live::start_line(&url_s));
+    }
     let first = match Url::parse(&url_s) {
         Err(e) => Err(net::NetError {
             code: "bad_url".into(),
@@ -293,6 +314,12 @@ fn main() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("streamprobe: could not start ffmpeg: {e}");
+            if args.live_json {
+                let _ = live::emit(&live::error_line(
+                    "ffmpeg_start",
+                    &format!("could not start ffmpeg: {e}"),
+                ));
+            }
             exit(3);
         }
     };
@@ -336,7 +363,7 @@ fn main() {
     }
 
     let mut stop_reason = "stopped by user".to_string();
-    let (mut printed, mut last_status, mut last_save) = (0u64, 0.0, 0.0);
+    let (mut printed, mut last_status, mut last_save, mut last_report) = (0u64, 0.0, 0.0, f64::NEG_INFINITY);
     let mut cache = ui::TimelineCache::new();
     let ui_pal = Pal { on: !no_color };
     sh.streaming.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -381,6 +408,24 @@ fn main() {
                         break;
                     }
                 }
+            }
+        } else if args.live_json {
+            std::thread::sleep(Duration::from_millis(250));
+            // build under the lock, write after it: a slow reader must never stall analysis
+            let lines = {
+                let st = sh.lock();
+                let mut v = vec![live::live_line(&st, now, printed)];
+                printed = st.events_total;
+                if now - last_report >= 1.0 {
+                    v.push(live::report_line(&st, now));
+                    last_report = now;
+                }
+                v
+            };
+            // the front end reads our stdout: if it has gone, so has the reason to keep listening
+            if lines.iter().any(|l| live::emit(l).is_err()) {
+                stop_reason = "front end closed".into();
+                break;
             }
         } else {
             std::thread::sleep(Duration::from_millis(500));

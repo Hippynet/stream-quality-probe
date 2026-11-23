@@ -104,6 +104,7 @@ streamprobe <URL> --allow-internal   # probe a server on a private network by ho
 | `-o, --output FILE` | Also save the report to `FILE`: JSON if it ends in `.json`, plain text otherwise. It is rewritten every 30 s, so you can read a long run while it's going |
 | `--json` | Print the final report as JSON on stdout. Progress and events go to stderr |
 | `--no-ui` | No dashboard: print events as they happen and a status line every 10 s |
+| `--live-json` | For GUI front ends: stream state as JSON lines on stdout until `-t` or Ctrl-C (see [Live JSON for front ends](#live-json-for-front-ends)) |
 | `--insecure` | Continue if the TLS certificate is invalid. The problem is still reported as `tls_cert` |
 | `--allow-internal` | Allow connections to private, loopback and link-local addresses (see [The internal-address guard](#the-internal-address-guard)) |
 | `-V, --version` / `-h, --help` | Version / help |
@@ -169,6 +170,18 @@ The main keys are:
 
 **Some fields are controlled by the server you're probing.** Response headers, stream titles, ffprobe's output, the HTTP status line, the certificate issuer and any "server said: …" text inside messages come straight from the stream's server or encoder. The report lists these JSON paths in `untrusted_fields`. streamprobe replaces control characters and bidirectional-override characters in this text, but it's still the server's text. Treat it as untrusted input: escape it before you put it in a web page or chat message, never pass it to a shell, and don't follow instructions or links found in it.
 
+### Live JSON for front ends
+
+`--live-json` is for programs that show a check as it runs, such as the Mac app. stdout carries only newline-delimited JSON, one compact object per line, each with a `type`:
+
+- `start`: once, before connecting: `version`, `url`
+- `live`: every 250 ms: the values the dashboard shows (`levels`, `loudness`, `stereo`, `quality`, `delivery`, `now_playing`), the checks so far (`result`, `findings[]`, using the dashboard's in-progress rules) and the `events[]` logged since the previous `live` line
+- `report`: about once a second: the full JSON report so far, as `--json` writes it, under `report`
+- `final`: once, at the end: the final `report`, the same report pretty-printed as `json_text`, the plain-text report as `text`, and `exit_code`
+- `error`: instead of the above when the run can't start (`ffmpeg_missing`, `ffmpeg_start`)
+
+There's no default time limit: send SIGINT (Ctrl-C) to stop and get the `final` line. A SIGINT before the stream is connected exits at once without a `final` line, as Ctrl-C does in the terminal. Field names follow the JSON report, and the same rules about server-controlled text apply.
+
 ## The internal-address guard
 
 By default, streamprobe refuses to connect to any address that isn't globally routable: private (RFC 1918), loopback, link-local (including the `169.254.169.254` cloud metadata service), CGNAT, and other reserved ranges, in IPv4 and IPv6. The check applies to the URL you give, every redirect and every playlist entry, and it fails with `blocked_internal`.
@@ -183,6 +196,20 @@ You can still probe internal servers:
 Even with internal addresses allowed, link-local and cloud-metadata addresses stay blocked unless you typed one yourself.
 
 One limit applies to HLS: ffmpeg fetches the playlist and segments itself. streamprobe checks every host the playlist (and its first variant playlists) lists before handing over, but not hosts that appear later in a live playlist, or DNS answers that change after the check. ffmpeg is restricted to HTTP(S), and nothing it fetches reaches the report except decoded audio and decoder error lines (see [SECURITY.md](SECURITY.md)).
+
+## Mac app (local build)
+
+`macos/` holds a native macOS app for spot-checks: paste a stream URL, press Check, watch the levels, stereo state and timeline live, and read the verdict in the sidebar. Select a finding to see what it means, what to check, and when it happened on the timeline. It runs this `streamprobe` with `--live-json`, so its findings are the CLI's findings.
+
+It needs macOS 14 or later, Xcode (it doesn't change `xcode-select`), Rust and ffmpeg from Homebrew:
+
+```bash
+make mac           # builds dist/Streamprobe.app (ad-hoc signed, for this Mac)
+make mac-install   # copies it to ~/Applications
+make mac-test      # the app's unit tests
+```
+
+The app isn't notarised, so it's for the Mac it was built on. `open -a Streamprobe --args <URL>` starts a check straight away.
 
 ## Supported platforms
 

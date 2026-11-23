@@ -1,9 +1,11 @@
 # streamprobe task runner: `make help` lists the targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint fmt run test-faults deny notices install
+.PHONY: help build test lint fmt run test-faults deny notices install mac-test mac mac-install
 
 PREFIX ?= /usr/local
+# Full Xcode for the Mac app, without changing xcode-select.
+DEVELOPER_DIR ?= /Applications/Xcode.app/Contents/Developer
 # Targets for `make notices` (default: this machine).
 TARGETS ?= $(shell rustc -vV | sed -n 's/^host: //p')
 
@@ -39,3 +41,14 @@ notices: ## Write THIRD_PARTY_LICENSES.txt (make notices TARGETS="x86_64-unknown
 
 install: build ## Install into $(PREFIX)/bin (default /usr/local)
 	install -m 0755 target/release/streamprobe "$(PREFIX)/bin/streamprobe"
+
+mac-test: ## Swift unit tests for the Mac app
+	DEVELOPER_DIR=$(DEVELOPER_DIR) swift test --package-path macos
+
+mac: ## Build the Mac app (dist/Streamprobe.app; needs Xcode)
+	sh macos/scripts/build-app.sh
+
+mac-install: mac ## Copy the Mac app to ~/Applications
+	mkdir -p "$(HOME)/Applications"
+	rm -rf "$(HOME)/Applications/Streamprobe.app"
+	ditto dist/Streamprobe.app "$(HOME)/Applications/Streamprobe.app"
