@@ -104,6 +104,8 @@ public struct ProbeReport: Sendable, Equatable {
     public var timeline: Timeline
     public var durationS: Double
     public var stopReason: String
+    /// The report's event log (its most recent 200 events).
+    public var events: [ProbeEvent]
     public var connection: [String: JSONValue]
     public var headers: [String: JSONValue]
     public var format: [String: JSONValue]
@@ -163,6 +165,7 @@ public enum ProbeMessage: Sendable, Equatable {
         var timeline: Timeline
         var durationS: Double
         var stopReason: String
+        var events: [ProbeEvent]
     }
     private struct Typed: Decodable {
         var report: TypedReport
@@ -177,7 +180,7 @@ public enum ProbeMessage: Sendable, Equatable {
 
     private static func report(_ t: TypedReport, _ r: RawReport) -> ProbeReport {
         ProbeReport(result: t.result, findings: t.findings, timeline: t.timeline, durationS: t.durationS,
-                    stopReason: t.stopReason, connection: r.connection, headers: r.headers, format: r.format,
+                    stopReason: t.stopReason, events: t.events, connection: r.connection, headers: r.headers, format: r.format,
                     audio: r.audio, delivery: r.delivery, metadata: r.metadata)
     }
 }

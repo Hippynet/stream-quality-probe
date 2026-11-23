@@ -117,3 +117,11 @@ private func liveSnapshot(events: [ProbeEvent] = [], findings: [Finding] = []) -
     s.handle(.live(liveSnapshot()))
     #expect(s.sawAudio) // stays true: audio stopped arriving
 }
+
+@MainActor @Test func finalReportEventsFillAnEmptyLog() throws {
+    let s = CheckSession()
+    let last = try #require(fixtureLines("missing.ndjson").last)
+    s.handle(try #require(ProbeMessage.decode(last)))
+    #expect(s.events.map(\.code).contains("http_404"))
+    #expect(s.result?.report.events.isEmpty == false)
+}

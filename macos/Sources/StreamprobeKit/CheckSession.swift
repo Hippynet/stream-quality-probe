@@ -103,6 +103,8 @@ public final class CheckSession {
         case .finished(let f):
             result = f
             report = f.report
+            // a check that never streamed (could not connect) sent no live lines
+            if events.isEmpty { events = f.report.events }
             phase = .finished(exitCode: f.exitCode)
         case .error(let e):
             phase = .failed(e)
