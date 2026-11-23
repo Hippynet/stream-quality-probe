@@ -166,7 +166,7 @@ fn finish(sh: &Shared, args: &Args, stop_reason: &str, out_pal: Pal) -> ! {
     let now = sh.now();
     let st = sh.lock();
     if args.live_json {
-        live::emit(&live::final_line(&st, now, stop_reason, exit_code(&st, now)));
+        let _ = live::emit(&live::final_line(&st, now, stop_reason, exit_code(&st, now)));
     } else if args.json {
         println!(
             "{}",
@@ -241,7 +241,7 @@ fn main() {
     let Some(ffmpeg) = decoder::find_tool("ffmpeg") else {
         eprintln!("streamprobe: ffmpeg not found. Install it first:\n  macOS:  brew install ffmpeg\n  Debian/Ubuntu:  sudo apt install ffmpeg\n  RHEL/Alma/Rocky:  enable EPEL and RPM Fusion (rpmfusion.org/Configuration), then sudo dnf install ffmpeg");
         if args.live_json {
-            live::emit(&live::error_line(
+            let _ = live::emit(&live::error_line(
                 "ffmpeg_missing",
                 "ffmpeg not found. Install it with: brew install ffmpeg",
             ));
@@ -279,7 +279,7 @@ fn main() {
         limit.map_or(String::new(), |l| format!(" (running {l:.0}s)"))
     ));
     if args.live_json {
-        live::emit(&live::start_line(&url_s));
+        let _ = live::emit(&live::start_line(&url_s));
     }
     let first = match Url::parse(&url_s) {
         Err(e) => Err(net::NetError {
@@ -315,7 +315,7 @@ fn main() {
         Err(e) => {
             eprintln!("streamprobe: could not start ffmpeg: {e}");
             if args.live_json {
-                live::emit(&live::error_line(
+                let _ = live::emit(&live::error_line(
                     "ffmpeg_start",
                     &format!("could not start ffmpeg: {e}"),
                 ));
@@ -422,8 +422,10 @@ fn main() {
                 }
                 v
             };
-            for l in &lines {
-                live::emit(l);
+            // the front end reads our stdout: if it has gone, so has the reason to keep listening
+            if lines.iter().any(|l| live::emit(l).is_err()) {
+                stop_reason = "front end closed".into();
+                break;
             }
         } else {
             std::thread::sleep(Duration::from_millis(500));

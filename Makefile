@@ -1,7 +1,7 @@
 # streamprobe task runner: `make help` lists the targets.
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint fmt run test-faults deny notices install mac-test
+.PHONY: help build test lint fmt run test-faults deny notices install mac-test mac mac-install
 
 PREFIX ?= /usr/local
 # Full Xcode for the Mac app, without changing xcode-select.
@@ -44,3 +44,11 @@ install: build ## Install into $(PREFIX)/bin (default /usr/local)
 
 mac-test: ## Swift unit tests for the Mac app
 	DEVELOPER_DIR=$(DEVELOPER_DIR) swift test --package-path macos
+
+mac: ## Build the Mac app (dist/Streamprobe.app; needs Xcode)
+	sh macos/scripts/build-app.sh
+
+mac-install: mac ## Copy the Mac app to ~/Applications
+	mkdir -p "$(HOME)/Applications"
+	rm -rf "$(HOME)/Applications/Streamprobe.app"
+	ditto dist/Streamprobe.app "$(HOME)/Applications/Streamprobe.app"

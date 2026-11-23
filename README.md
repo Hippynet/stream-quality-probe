@@ -197,6 +197,20 @@ Even with internal addresses allowed, link-local and cloud-metadata addresses st
 
 One limit applies to HLS: ffmpeg fetches the playlist and segments itself. streamprobe checks every host the playlist (and its first variant playlists) lists before handing over, but not hosts that appear later in a live playlist, or DNS answers that change after the check. ffmpeg is restricted to HTTP(S), and nothing it fetches reaches the report except decoded audio and decoder error lines (see [SECURITY.md](SECURITY.md)).
 
+## Mac app (local build)
+
+`macos/` holds a native macOS app for spot-checks: paste a stream URL, press Check, watch the levels, stereo state and timeline live, and read the verdict in the sidebar. Select a finding to see what it means, what to check, and when it happened on the timeline. It runs this `streamprobe` with `--live-json`, so its findings are the CLI's findings.
+
+It needs macOS 14 or later, Xcode (it doesn't change `xcode-select`), Rust and ffmpeg from Homebrew:
+
+```bash
+make mac           # builds dist/Streamprobe.app (ad-hoc signed, for this Mac)
+make mac-install   # copies it to ~/Applications
+make mac-test      # the app's unit tests
+```
+
+The app isn't notarised, so it's for the Mac it was built on. `open -a Streamprobe --args <URL>` starts a check straight away.
+
 ## Supported platforms
 
 | Platform | Build |

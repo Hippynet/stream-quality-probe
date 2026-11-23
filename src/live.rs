@@ -101,11 +101,15 @@ pub fn error_line(code: &str, message: &str) -> Value {
     json!({"type": "error", "code": code, "message": message})
 }
 
-/// One compact line on stdout, flushed so the reader sees it at once.
-pub fn emit(v: &Value) {
-    let mut out = std::io::stdout().lock();
-    let _ = writeln!(out, "{}", serde_json::to_string(v).unwrap_or_default());
-    let _ = out.flush();
+/// One compact line on stdout, flushed so the reader sees it at once. An error
+/// means the reader has gone (the front end quit or crashed): stop the run.
+pub fn emit(v: &Value) -> std::io::Result<()> {
+    emit_to(&mut std::io::stdout().lock(), v)
+}
+
+pub fn emit_to(out: &mut impl Write, v: &Value) -> std::io::Result<()> {
+    writeln!(out, "{}", serde_json::to_string(v).unwrap_or_default())?;
+    out.flush()
 }
 
 #[cfg(test)]
@@ -234,6 +238,25 @@ mod tests {
             let back: serde_json::Value = serde_json::from_str(&s).unwrap();
             assert_eq!(back, v);
         }
+    }
+
+    struct Closed;
+    impl std::io::Write for Closed {
+        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::ErrorKind::BrokenPipe.into())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn emit_reports_a_closed_reader() {
+        // the front end quit: the run must notice, or it streams forever
+        assert!(emit_to(&mut Closed, &start_line("x")).is_err());
+        let mut buf = Vec::new();
+        emit_to(&mut buf, &start_line("x")).unwrap();
+        assert_eq!(buf.iter().filter(|b| **b == b'\n').count(), 1);
     }
 
     #[test]
