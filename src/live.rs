@@ -5,8 +5,6 @@
 //! about once a second (the `--json` report so far), and `final` at the end.
 //! `error` replaces all of them when the run can't start (ffmpeg missing).
 
-#![allow(dead_code)] // TEMP: wired into main by the next commit
-
 use std::io::Write;
 
 use serde_json::{json, Value};
